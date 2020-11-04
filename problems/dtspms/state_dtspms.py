@@ -58,6 +58,9 @@ class StateDTSPMS(NamedTuple):
     @property
     def loc_dropoff_depot(self):
         return self.loc[:,self.total_items+1,:]
+    @property
+    def loc_pickup_depot(self):
+        return self.loc[:,0,:]
         
     @property
     def num_items_by_stack(self):
@@ -159,15 +162,24 @@ class StateDTSPMS(NamedTuple):
         """
 
         if self.pickup:
-            # Make sure we selected a pickup index
-            assert (selected < self.total_items + 1).all(), "Only pickup locations can be selected during pickup"
+            # Make sure we selected a pickup index or the dropoff depot
+            assert (selected <= self.total_items + 1).all(), "Only pickup locations can be selected during pickup"
             pickup = True
             prev_a = selected[:, None] 
             
             # Move to new position, add the length
             cur_coord = self.loc[self.ids, selected] # Shape (B, 2)
-            lengths = self.lengths + (cur_coord - self.cur_coord).norm(p=2, dim=-1)  # (batch_dim, 1)
+            if (self.prev_a == 0).all() and (selected == self.total_items + 1).all():
+                # Moving from pickup to dropoff depot
+                # Movement cost is not added to the final cost
+                lengths = self.lengths
+                # The next state will no longer be in pickup mode
+                pickup = False
+            else:
+                lengths = self.lengths + (cur_coord - self.cur_coord).norm(p=2, dim=-1)  # (batch_dim, 1)
             
+            
+            """
             if self.finished_pickup():
                 assert (selected == 0).all(), "Must move to depot after finishing pickup"
                 assert (cur_coord == self.pickup_loc[:, 0]).all(), "Must be at depot"
@@ -178,19 +190,23 @@ class StateDTSPMS(NamedTuple):
                 prev_a = selected[:, None]
                 # Transition to the dropoff phase
                 pickup = False
-            
-            
-            # Add item to top of stack.
-            # TODO: Add error checking for whether stack is full. 
-            # First, get the first empty position in each stack
-            stack_next_empty_idx = self.num_items_by_stack    
-            # shape (B, num_stacks) and entries in (0, .., stack_size-1)
-            # Numpy and PyTorch expect a tuple of coordinate arrays for multidimensional indexing
-            stack_idx = stack_next_empty_idx[self.ids, stack] 
-            # shape (B,) and entries in (0, ..., stack_size-1)
-            # Items are indexed from 1 to N, 0 represents lack of item
-            items_in_stack = self.items_in_stack.detach().clone()
-            items_in_stack[self.ids, stack, stack_idx] = selected + 1
+            """
+           
+            # Only add new items if we are not moving to the pickup or dropoff depot
+            if not (selected == 0).all() and not (selected == self.total_items + 1).all():     
+                # Add item to top of stack.
+                # TODO: Add error checking for whether stack is full. 
+                # First, get the first empty position in each stack
+                stack_next_empty_idx = self.num_items_by_stack    
+                # shape (B, num_stacks) and entries in (0, .., stack_size-1)
+                # Numpy and PyTorch expect a tuple of coordinate arrays for multidimensional indexing
+                stack_idx = stack_next_empty_idx[self.ids, stack] 
+                # shape (B,) and entries in (0, ..., stack_size-1)
+                # Items are indexed from 1 to N, 0 represents lack of item
+                items_in_stack = self.items_in_stack.detach().clone()
+                items_in_stack[self.ids, stack, stack_idx] = selected
+            else:
+                items_in_stack = self.items_in_stack
             
             # Set the visited mask
             if self.visited_.dtype == torch.uint8:
@@ -212,16 +228,14 @@ class StateDTSPMS(NamedTuple):
 
         else: 
             # dropoff
-            assert (selected >= self.total_items + 1).all(), \
-                "Only dropoff locations can be selected during dropoff"
             stack_last_occupied_idx = self.num_items_by_stack - 1
             # Numpy and PyTorch expect a tuple of coordinate arrays for multidimensional indexing
             stack_idx = stack_last_occupied_idx[self.ids, stack] 
             item_to_deliver = self.items_in_stack[self.ids, stack, stack_idx]
             
             # Ignore argument selected; next location is determined by item removed
-            selected = item_to_deliver - 1
-            prev_a = selected[:, None] 
+            selected = item_to_deliver + self.total_items + 1
+            prev_a = selected
             
             # Move to new position, add the length
             cur_coord = self.loc[self.ids, selected]
@@ -261,12 +275,10 @@ class StateDTSPMS(NamedTuple):
                          num_dropped_off = num_dropped_off)
 
     def finished_pickup(self):
-        total_items = self.loc_pickup.size(1) - 1
-        return self.num_picked_up.item() >= total_items
+        return self.num_picked_up.item() >= self.total_items
     
     def finished_dropoff(self):
-        total_items = self.loc_pickup.size(1) - 1
-        return self.num_dropped_off.item() >= total_items
+        return self.num_dropped_off.item() >= self.total_items
 
     def all_finished(self):
         return self.finished_pickup() and self.finished_dropoff() \
@@ -285,23 +297,29 @@ class StateDTSPMS(NamedTuple):
         # A mask that makes all pickup locations feasible and dropoff locations infeasible
         pickup_mask = torch.arange(2).repeat_interleave(self.total_items + 1) \
                                      .view(1,-1) \
-                                     .repeat(self.batch_size)
+                                     .repeat(self.batch_size,1)
         # A mask that makes only the pickup depot feasible
         depot_mask = torch.ones((self.batch_size, self.total_items+1), dtype=torch.uint8)
         depot_mask[:,0] -= 1
         if self.visited_.dtype == torch.uint8:
-            visited_loc = self.visited_[:, :, 1:]
+            visited_loc = self.visited_[:, :, :]
         else:
             visited_loc = mask_long2bool(self.visited_, n=self.demand.size(-1))
 
         if self.pickup:
-            depot_mask = torch.cat(depot_mask, torch.ones_like(depot_mask), dim=1)
-            if self.finished_pickup(): 
-                # Can only go to depot
-                return depot_mask
+            if self.finished_pickup():
+                if (self.get_current_node() == 0).all():
+                    # We are at the pickup depot
+                    # Can only go to dropoff depot
+                    return torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1)
+                # We are not at the pickup depot
+                # Can only go to pickup depot
+                return torch.cat([torch.ones_like(depot_mask), depot_mask], dim=1)
             else:
-                # Cannot go to depot, visited nodes, or dropoff nodes
-                return (1 - depot_mask) | visited_loc | pickup_mask
+                # We have not finished picking up all items
+                # Go to an unvisited node with an item
+                return (1 - torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1)) \
+                    | visited_loc | pickup_mask
         
         else:
             # For dropoff we ignore the node selection anyway
@@ -321,11 +339,11 @@ class StateDTSPMS(NamedTuple):
         if self.pickup:
             # feasible stacks are non-full stacks
             # set 1 for all full stacks
-            return self.num_items_by_stack() == self.stack_size
+            return (self.num_items_by_stack == self.stack_size).to(torch.uint8)
         else:
             # feasible stacks are non-empty stacks
             # set 1 for all empty stacks
-            return self.num_items_by_stack == 0
+            return (self.num_items_by_stack == 0).to(torch.uint8)
     
     def get_mask(self):
         """
