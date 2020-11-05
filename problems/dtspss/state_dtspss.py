@@ -252,13 +252,17 @@ class StateDTSPSS(NamedTuple):
         0 = feasible, 1 = infeasible
         :return:
         """
-        
+        device = self.loc.device
         # A mask that makes all pickup locations feasible and dropoff locations infeasible
-        pickup_mask = torch.arange(2).repeat_interleave(self.total_items + 1) \
-                                     .view(1,-1) \
-                                     .repeat(self.batch_size,1)
+        pickup_mask = torch.arange(2, dtype=torch.uint8)\
+                .repeat_interleave(self.total_items + 1) \
+                .view(1,-1) \
+                .repeat(self.batch_size,1) \
+                .to(device)
+
+        print(pickup_mask.shape)
         # A mask that makes only the pickup depot feasible
-        depot_mask = torch.ones((self.batch_size, self.total_items+1), dtype=torch.uint8)
+        depot_mask = torch.ones((self.batch_size, self.total_items+1), dtype=torch.uint8).to(device)
         depot_mask[:,0] -= 1
         if self.visited_.dtype == torch.uint8:
             visited_loc = self.visited_[:, :, :]
@@ -270,10 +274,10 @@ class StateDTSPSS(NamedTuple):
                 if (self.get_current_node() == 0).all():
                     # We are at the pickup depot
                     # Can only go to dropoff depot
-                    return torch.cat([torch.ones_like(depot_mask), depot_mask], dim=1)
+                    return torch.cat([torch.ones_like(depot_mask), depot_mask], dim=1).to(device)
                 # We are not at the pickup depot
                 # Can only go to pickup depot
-                return torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1)
+                return torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1).to(device)
             else:
                 # We have not finished picking up all items
                 # Go to an unvisited node with an item
@@ -289,33 +293,13 @@ class StateDTSPSS(NamedTuple):
             node_onehot_mask.scatter_(1, node_to_move_to.view(-1,1), 1)
             return 1 - node_onehot_mask
             
-            
-    def get_stack_mask(self):
-        """
-        Gets a (B, num_stacks) mask with feasible stacks. 0 = feasible, 1 = infeasible
-        
-        For pickup: 
-            feasible stacks are non-full stacks
-        For dropoff:
-            feasible stacks are non-empty stacks
-        """
-        
-        if self.pickup:
-            # feasible stacks are non-full stacks
-            # set 1 for all full stacks
-            return (self.num_items_by_stack == self.stack_size).to(torch.uint8)
-        else:
-            # feasible stacks are non-empty stacks
-            # set 1 for all empty stacks
-            return (self.num_items_by_stack == 0).to(torch.uint8)
-    
     def get_mask(self):
         """
         Gets boolean masks for feasible movements
         
         :return:    node_mask
-                    node_mask is a (B, 2N+2) mask of valid nodes to move to
+                    node_mask is a (B, 1, 2N+2) mask of valid nodes to move to
         """
-        return self.get_node_mask()
+        return self.get_node_mask()[:,None,:]
                 
                 

@@ -228,12 +228,18 @@ class AttentionModel(nn.Module):
                 1
             )
         elif self.is_dtspss:
+            #print("Executing")
+            #emb_pickup_depot = self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :]
+            #print(emb_pickup_depot.shape)
+            #emb_pickup_loc = self.init_embed(input['pickup_loc'])
+            #emb_dropoff_depot = self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :]
+            #emb_dropoff_loc = self.init_embed(input['dropoff_loc'])
             return torch.cat(
                 (
                     self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :],
                     self.init_embed(input['pickup_loc']),
                     self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :],
-                    self.init_embed(input['dropoff_depot'])
+                    self.init_embed(input['dropoff_loc'])
                 ),
                 1
             )
@@ -372,6 +378,7 @@ class AttentionModel(nn.Module):
 
         # Compute the mask
         mask = state.get_mask()
+        print(mask.shape)
 
         # Compute logits (unnormalized log_p)
         log_p, glimpse = self._one_to_many_logits(query, glimpse_K, glimpse_V, logit_K, mask)
@@ -441,6 +448,14 @@ class AttentionModel(nn.Module):
                 ),
                 -1
             )
+        elif self.is_dtspss:
+            return     torch.gather(
+                            embeddings,
+                            1,
+                            current_node.contiguous()
+                                .view(batch_size, num_steps, 1)
+                                .expand(batch_size, num_steps, embeddings.size(-1))
+                        ).view(batch_size, num_steps, embeddings.size(-1))
         else:  # TSP
         
             if num_steps == 1:  # We need to special case if we have only 1 step, may be the first or not
@@ -468,7 +483,6 @@ class AttentionModel(nn.Module):
             ), 1)
 
     def _one_to_many_logits(self, query, glimpse_K, glimpse_V, logit_K, mask):
-
         batch_size, num_steps, embed_dim = query.size()
         key_size = val_size = embed_dim // self.n_heads
 
