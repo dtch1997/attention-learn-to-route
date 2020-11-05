@@ -141,7 +141,7 @@ class StateDTSPSS(NamedTuple):
         During pickup, a step consists of moving to a valid node, picking up an item, and selecting a stack to place it on.
         During delivery, a step consists of selecting a stack, removing the top item, and delivering it to that node.  
         
-        :param selected:    torch.Tensor of shape (B,), 
+        :param selected:    torch.Tensor of shape (B,1), 
                             Entries in (0, 1, ..., N-1) representing which node to travel to next
                             
         :param stack:       torch.Tensor of shape (B,), 
@@ -192,10 +192,10 @@ class StateDTSPSS(NamedTuple):
 
         else: 
             # dropoff
-            # Ignore argument selected; next location is determined by item removed
-            item_to_deliver = self.items_in_stack[self.ids, self.num_items-1]
-            selected = item_to_deliver + self.total_items + 1
-            prev_a = selected
+            item_to_deliver = self.items_in_stack[self.ids, self.num_items-1].view(-1)
+            assert (selected == item_to_deliver + self.total_items + 1).all(), \
+                f"Selected {selected} != item_to_deliver {item_to_deliver}"
+            prev_a = selected[:, None] 
             
             # Move to new position, add the length
             cur_coord = self.loc[self.ids, selected]
@@ -283,8 +283,13 @@ class StateDTSPSS(NamedTuple):
         else:
             # For dropoff we ignore the node selection anyway
             # So here we return all zeros -> all nodes feasible
-            return torch.zeros((self.batch_size, 2 * (self.total_items + 1)), dtype=torch.uint8)
-        
+            item_to_deliver = self.items_in_stack[self.ids, self.num_items-1]
+            node_to_move_to = item_to_deliver + self.total_items + 1
+            node_onehot_mask = torch.zeros((self.batch_size, self.total_locations), dtype=torch.float32)
+            node_onehot_mask.scatter_(1, node_to_move_to.view(-1,1), 1)
+            return 1 - node_onehot_mask
+            
+            
     def get_stack_mask(self):
         """
         Gets a (B, num_stacks) mask with feasible stacks. 0 = feasible, 1 = infeasible

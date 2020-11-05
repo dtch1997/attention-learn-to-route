@@ -37,8 +37,10 @@ def test_dtspss():
     print(state.get_current_node(), state.lengths, state.get_mask())
 
     # Should be delivering items now
+    selected = selected + 10
     for iteration in range(9):
-        state = state.update(torch.LongTensor([0]).view(1,))
+        selected = selected - 1
+        state = state.update(selected)
         print(state.get_current_node(), state.lengths, state.get_mask())
     print(state.finished_pickup(), state.finished_dropoff(), state.all_finished())
 

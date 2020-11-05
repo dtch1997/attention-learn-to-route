@@ -65,6 +65,7 @@ class AttentionModel(nn.Module):
         self.is_vrp = problem.NAME == 'cvrp' or problem.NAME == 'sdvrp'
         self.is_orienteering = problem.NAME == 'op'
         self.is_pctsp = problem.NAME == 'pctsp'
+        self.is_dtspss = problem.NAME == 'dtspss'
 
         self.tanh_clipping = tanh_clipping
 
@@ -91,6 +92,13 @@ class AttentionModel(nn.Module):
             
             if self.is_vrp and self.allow_partial:  # Need to include the demand if split delivery allowed
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
+        elif self.is_dtspss:
+            # DTSPSS
+            step_context_dim = embedding_dim + 1 # Embedding of last node + pickup / delivery boolean
+            node_dim = 2        # x, y
+            self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
+            self.init_embed_dropoff_depot = nn.Linear(2, embedding_dim)
+
         else:  # TSP
             assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
             step_context_dim = 2 * embedding_dim  # Embedding of first and last node
@@ -216,6 +224,16 @@ class AttentionModel(nn.Module):
                         input['loc'],
                         *(input[feat][:, :, None] for feat in features)
                     ), -1))
+                ),
+                1
+            )
+        elif self.is_dtspss:
+            return torch.cat(
+                (
+                    self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :],
+                    self.init_embed(input['pickup_loc']),
+                    self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :],
+                    self.init_embed(input['dropoff_depot'])
                 ),
                 1
             )
