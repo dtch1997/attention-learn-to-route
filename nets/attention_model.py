@@ -94,7 +94,7 @@ class AttentionModel(nn.Module):
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
         elif self.is_dtspss:
             # DTSPSS
-            step_context_dim = embedding_dim + 1 # Embedding of last node + pickup / delivery boolean
+            step_context_dim = embedding_dim # Embedding of last node + pickup / delivery boolean
             node_dim = 2        # x, y
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
             self.init_embed_dropoff_depot = nn.Linear(2, embedding_dim)
