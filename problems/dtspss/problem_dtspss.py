@@ -96,7 +96,7 @@ class DTSPSSDataset(Dataset):
                     'pickup_loc': torch.FloatTensor(size, 2).uniform_(0, 1),
                     'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,1),
                     'pickup_depot': torch.FloatTensor(2).uniform_(0, 1),
-                    'dropoff_depot': torch.FloatTensor(2).uniform(0, 1),
+                    'dropoff_depot': torch.FloatTensor(2).uniform_(0, 1),
                 }
                 for i in range(num_samples)
             ]
