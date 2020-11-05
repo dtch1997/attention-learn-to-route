@@ -282,7 +282,7 @@ class StateDTSPMS(NamedTuple):
 
     def all_finished(self):
         return self.finished_pickup() and self.finished_dropoff() \
-            and (self.cur_coord == self.loc_dropoff_depot).all()
+            and (self.prev_a == self.total_items + 1).all()
     
     def get_current_node(self):
         return self.prev_a
@@ -311,10 +311,10 @@ class StateDTSPMS(NamedTuple):
                 if (self.get_current_node() == 0).all():
                     # We are at the pickup depot
                     # Can only go to dropoff depot
-                    return torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1)
+                    return torch.cat([torch.ones_like(depot_mask), depot_mask], dim=1)
                 # We are not at the pickup depot
                 # Can only go to pickup depot
-                return torch.cat([torch.ones_like(depot_mask), depot_mask], dim=1)
+                return torch.cat([depot_mask, torch.ones_like(depot_mask)], dim=1)
             else:
                 # We have not finished picking up all items
                 # Go to an unvisited node with an item
