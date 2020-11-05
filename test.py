@@ -43,6 +43,8 @@ def test_dtspss():
         state = state.update(selected)
         print(state.get_current_node(), state.lengths, state.get_mask())
     print(state.finished_pickup(), state.finished_dropoff(), state.all_finished())
+    
+    print(state.get_mask().shape)
 
 def test_tsp():
     input = torch.FloatTensor([(i,j) for i in range(3) for j in range(3)]).view(1,-1,2)

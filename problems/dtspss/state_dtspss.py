@@ -259,8 +259,6 @@ class StateDTSPSS(NamedTuple):
                 .view(1,-1) \
                 .repeat(self.batch_size,1) \
                 .to(device)
-
-        print(pickup_mask.shape)
         # A mask that makes only the pickup depot feasible
         depot_mask = torch.ones((self.batch_size, self.total_items+1), dtype=torch.uint8).to(device)
         depot_mask[:,0] -= 1
