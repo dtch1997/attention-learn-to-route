@@ -4,13 +4,28 @@ import torch
 from typing import NamedTuple
 
 class Stack(NamedTuple):   
+    """
+    A general purpose Stack backed by torch Tensors to facilitate
+    deep feature extraction.
+        
+    Supported methods:
+        empty()
+        full()
+        push()
+        peek()
+        pop()
+        
+    Does very little error checking so users should be careful to
+    call push() only when the stack is not full, and pop() when the stack
+    is not empty. 
+    """
     contents: torch.Tensor
     num_stacks: int
     stack_size: int
     
     @staticmethod
-    def initialize(size, dtype = torch.int64):
-        return Stack(contents = torch.zeros(size = size, dtype = dtype),
+    def initialize(size, dtype = torch.int64, device = None):
+        return Stack(contents = torch.zeros(size = size, dtype = dtype, device = device),
                      num_stacks = size[-2],
                      stack_size = size[-1])
         
@@ -21,13 +36,18 @@ class Stack(NamedTuple):
             )
         return super(Stack, self).__getitem__(key)
         
-    @property
-    def num_items(self):
+    def current_size(self, per_stack = True):
         """
         :return:            torch.Tensor size (B, steps, num_stacks, 1) of 
                             the number of items in every stack
+                            
+                            OR torch.Tensor size (B, steps) of total items across
+                            all stacks if per_stack = False
         """
-        return (self.contents > 0).sum(dim = -1, keepdim = True)
+        if per_stack:
+            return (self.contents > 0).sum(dim = -1, keepdim = True)
+        else:
+            return (self.contents > 0).sum(dim = (-2,-1))
         
     def peek(self, stack_idx = None):
         """
@@ -42,7 +62,7 @@ class Stack(NamedTuple):
                             
                             or torch.Tensor size(B, steps, 1) if stack_idx set
         """
-        last_occupied_idx = self.num_items - 1
+        last_occupied_idx = self.current_size() - 1
         # If last_occupied_idx = -1, that stack is empty, so return a 0
         last_occupied_idx[last_occupied_idx < 0] = 0
         items = self.contents.gather(-1, last_occupied_idx)
@@ -57,13 +77,13 @@ class Stack(NamedTuple):
                             True if that stack is empty, False otherwise
         """
         if stack_idx is not None:
-            return (self.num_items == 0).gather(-1, stack_idx)
-        return (self.num_items == 0)
+            return (self.current_size() == 0).gather(-1, stack_idx)
+        return (self.current_size() == 0)
     
     def full(self, stack_idx = None):
         if stack_idx is not None:
-            return (self.num_items == self.stack_size).gather(-1, stack_idx, keepdim=True)
-        return self.num_items == self.stack_size
+            return (self.current_size() == self.stack_size).gather(-1, stack_idx, keepdim=True)
+        return self.current_size() == self.stack_size
     
     def push(self, items, stack_idx = None):
         """
@@ -80,8 +100,10 @@ class Stack(NamedTuple):
         """
         #if stack_idx is not None:
         #    assert items.size() == stack_idx.size(), "Number of items must be same as stack index"
+        assert self.items_is_valid(items), f"Invalid items {items}"
+        assert self.stack_idx_is_valid(stack_idx), f"Invalid stack idx {stack_idx}"
         
-        next_empty_idx = self.num_items 
+        next_empty_idx = self.current_size() 
         # size (B, steps, num_stacks, 1), entries are the next empty stack position
         
         if stack_idx is not None:
@@ -94,7 +116,6 @@ class Stack(NamedTuple):
 
         else:
             all_items = items
-        print(f"All items: {all_items}")
         # size (B, step, num_stacks, 1)
         
         new_contents = self.contents.detach().clone()
@@ -114,7 +135,7 @@ class Stack(NamedTuple):
                             
                             or torch.Tensor size(B, steps, 1) if stack_idx set
         """
-        last_occupied_idx = self.num_items - 1
+        last_occupied_idx = self.current_size() - 1
         # If last_occupied_idx = -1, that stack is empty, so return a 0
         last_occupied_idx[last_occupied_idx < 0] = 0
         
@@ -137,6 +158,12 @@ class Stack(NamedTuple):
             contents = new_contents    
         )
         return new_stack, self.peek(stack_idx)
+    
+    def stack_idx_is_valid(self, stack_idx):
+        return len(stack_idx.size()) == 3
+    
+    def items_is_valid(self, items):
+        return len(items.size()) == 4
     
 if __name__ == "__main__":
     # Test the Stack API

@@ -65,7 +65,7 @@ class AttentionModel(nn.Module):
         self.is_vrp = problem.NAME == 'cvrp' or problem.NAME == 'sdvrp'
         self.is_orienteering = problem.NAME == 'op'
         self.is_pctsp = problem.NAME == 'pctsp'
-        self.is_dtspss = problem.NAME == 'dtspss'
+        self.is_dtspms = problem.NAME == 'dtspms'
 
         self.tanh_clipping = tanh_clipping
 
@@ -92,12 +92,22 @@ class AttentionModel(nn.Module):
             
             if self.is_vrp and self.allow_partial:  # Need to include the demand if split delivery allowed
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
-        elif self.is_dtspss:
-            # DTSPSS
-            step_context_dim = embedding_dim # Embedding of last node + pickup / delivery boolean
-            node_dim = 2        # x, y
+        elif self.is_dtspms:
+            # DTSPMS
+            # We focus on the case with 2 stacks
+            # and at most 20 items
+            
+            step_context_dim = 2 * embedding_dim 
+            # - previous node
+            # - stack contents
+            node_dim = 4        # x, y, pickup/dropoff, item index
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
             self.init_embed_dropoff_depot = nn.Linear(2, embedding_dim)
+            # Stack actions are represented as nodes in the graph, we need
+            # an embedder for that as well
+            self.stack_node_embed = nn.Embedding(2, embedding_dim)
+            # Stack contents are embedded as the sum of embeddings of their items
+            self.stack_embed = nn.Embedding(20, embedding_dim)
 
         else:  # TSP
             assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
@@ -227,19 +237,19 @@ class AttentionModel(nn.Module):
                 ),
                 1
             )
-        elif self.is_dtspss:
-            #print("Executing")
-            #emb_pickup_depot = self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :]
-            #print(emb_pickup_depot.shape)
-            #emb_pickup_loc = self.init_embed(input['pickup_loc'])
-            #emb_dropoff_depot = self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :]
-            #emb_dropoff_loc = self.init_embed(input['dropoff_loc'])
+        elif self.is_dtspms:
+            device = input['pickup_loc'].device()
+            batch_size = input['pickup_loc'].size(0)
+            stack_zero = torch.zeros((batch_size, 1), dtype=torch.int64).to(device)
+            stack_one = torch.ones((batch_size, 1), dtype=torch.int64).to(device)
             return torch.cat(
                 (
                     self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :],
                     self.init_embed(input['pickup_loc']),
                     self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :],
-                    self.init_embed(input['dropoff_loc'])
+                    self.init_embed(input['dropoff_loc']),
+                    self.stack_node_embed(stack_zero)[:, None, :],
+                    self.stack_node_embed(stack_one)[:, None, :]
                 ),
                 1
             )
@@ -278,7 +288,6 @@ class AttentionModel(nn.Module):
 
             # Select the indices of the next nodes in the sequences, result (batch_size) long
             selected = self._select_node(log_p.exp()[:, 0, :], mask[:, 0, :])  # Squeeze out steps dimension
-
             state = state.update(selected)
 
             # Now make log_p, selected desired output size by 'unshrinking'
@@ -378,7 +387,6 @@ class AttentionModel(nn.Module):
 
         # Compute the mask
         mask = state.get_mask()
-        print(mask.shape)
 
         # Compute logits (unnormalized log_p)
         log_p, glimpse = self._one_to_many_logits(query, glimpse_K, glimpse_V, logit_K, mask)
@@ -448,16 +456,27 @@ class AttentionModel(nn.Module):
                 ),
                 -1
             )
-        elif self.is_dtspss:
-            return     torch.gather(
-                            embeddings,
-                            1,
-                            current_node.contiguous()
-                                .view(batch_size, num_steps, 1)
-                                .expand(batch_size, num_steps, embeddings.size(-1))
-                        ).view(batch_size, num_steps, embeddings.size(-1))
-        else:  # TSP
+        elif self.is_dtspms:
+            
+            current_node_emb = torch.gather(
+                embeddings,
+                1,
+                current_node.contiguous()
+                    .view(batch_size, num_steps, 1)
+                    .expand(batch_size, num_steps, embeddings.size(-1))
+            ).view(batch_size, num_steps, embeddings.size(-1))
+            
+            # Sum along the stack_size dimension
+            # Take max along the num_stack dimension
+            stack_emb = self.stack_embed(state.stack.contents) \
+                            .sum(dim = -2) \
+                            .max(dim = -2)   
+                            
+            return torch.cat(
+                (current_node_emb, stack_emb), 2 
+            )
         
+        else:  # TSP
             if num_steps == 1:  # We need to special case if we have only 1 step, may be the first or not
                 if state.i.item() == 0:
                     # First and only step, ignore prev_a (this is a placeholder)
