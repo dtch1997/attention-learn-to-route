@@ -16,6 +16,9 @@ from nets.attention_model import AttentionModel
 from nets.pointer_network import PointerNetwork, CriticNetworkLSTM
 from utils import torch_load_cpu, load_problem
 
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+
 
 def run(opts):
 

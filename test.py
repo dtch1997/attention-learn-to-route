@@ -9,6 +9,8 @@ import torch
 import unittest
 from problems.dtspms.state_dtspms import StateDTSPMS
 from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset   
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class TestAttentionModel(unittest.TestCase):
