@@ -12,8 +12,8 @@ from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset
 
 
 class TestAttentionModel(unittest.TestCase):
-    """Test using the AttentionModel problem"""    
-    def test_dtspms(self):
+    """Test the AttentionModel on the DTSPMS"""    
+    def test_forward_pass(self):
         from nets.attention_model import AttentionModel
         from reinforce_baselines import NoBaseline
         from torch.utils.data import DataLoader
