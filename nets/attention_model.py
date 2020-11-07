@@ -108,7 +108,8 @@ class AttentionModel(nn.Module):
             # an embedder for that as well
             self.stack_node_embed = nn.Embedding(2, embedding_dim)
             # Embed an item
-            self.item_embed = nn.Embedding(20, embedding_dim)
+            # Need 20 + 1 embeddings; empty = 0 is also embedded
+            self.item_embed = nn.Embedding(21, embedding_dim)
 
         else:  # TSP
             assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
