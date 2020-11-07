@@ -14,7 +14,7 @@ from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset
 class TestAttentionModel(unittest.TestCase):
     """Test the AttentionModel on the DTSPMS"""    
     def test_forward_pass(self):
-        from nets.attention_model import AttentionModel
+        from nets.attention_model import AttentionModel, set_decode_type
         from reinforce_baselines import NoBaseline
         from torch.utils.data import DataLoader
         
@@ -28,28 +28,68 @@ class TestAttentionModel(unittest.TestCase):
             normalization='batch',
             tanh_clipping=10,
             checkpoint_encoder=True,
-            shrink_size=16
+            shrink_size=None
         ).to(torch.device('cpu'))
+        
+        model.train()
+        set_decode_type(model, "sampling")
         
         baseline = NoBaseline()
         training_dataset = baseline.wrap_dataset(model.problem.make_dataset(
             size=5, num_samples=10, distribution=None))
-        training_dataloader = DataLoader(training_dataset, batch_size=1, num_workers=0)
+        training_dataloader = DataLoader(training_dataset, batch_size=2, num_workers=0)
+
+        for batch in training_dataloader:
+            cost, ll = model(batch)
+            print(cost, ll)
+            break
+    
+    def test_partial_forward_pass(self):
+        from nets.attention_model import AttentionModel, set_decode_type
+        from reinforce_baselines import NoBaseline
+        from torch.utils.data import DataLoader
+        
+        model = AttentionModel(
+            embedding_dim = 8,
+            hidden_dim = 8,
+            problem = DTSPMS,
+            n_encode_layers=3,
+            mask_inner=True,
+            mask_logits=True,
+            normalization='batch',
+            tanh_clipping=10,
+            checkpoint_encoder=True,
+            shrink_size=None
+        ).to(torch.device('cpu'))
+        
+        model.train()
+        set_decode_type(model, "sampling")
+        
+        baseline = NoBaseline()
+        training_dataset = baseline.wrap_dataset(model.problem.make_dataset(
+            size=5, num_samples=10, distribution=None))
+        training_dataloader = DataLoader(training_dataset, batch_size=2, num_workers=0)
 
         for batch in training_dataloader:
             init_embed = model._init_embed(batch)
             state = model.problem.make_state(batch)
-            self.assertTrue(init_embed.size() == (1,14,8))
+            self.assertTrue(init_embed.size() == (2,14,8))
             final_embed, _ = model.embedder(init_embed)
-            self.assertTrue(final_embed.size() == (1,14, 8))
+            self.assertTrue(final_embed.size() == (2,14, 8))
+            _log_p, pi = model._inner(batch, final_embed)
+            cost, mask = model.problem.get_costs(batch, pi)
+            
             context = model._get_parallel_step_context(final_embed, state)
-            self.assertTrue(context.size() == (1,1,24))
+            self.assertTrue(context.size() == (2,1,24))
             break
+        
 
 
 class TestDTSPMS(unittest.TestCase):
     """Unit test for the DTSPMS problem"""
-    pass
+    def test_get_cost(self):
+        # TODO: Implement
+        pass
 
 class TestDTSPMSDataset(unittest.TestCase):
     def test_initialize(self):
@@ -79,7 +119,6 @@ class TestStateDTSPMS(unittest.TestCase):
         for iteration in range(state.total_items):
             state = state.update(node)
             node = node + 1
-
             state = state.update(stack)
         self.assertTrue(state.finished_pickup())
             
@@ -87,8 +126,11 @@ class TestStateDTSPMS(unittest.TestCase):
         state = state.update(torch.LongTensor([5]))
         self.assertTrue(state.finished_transit())
         
+        node = node + state.total_items + 1
         for iteration in range(state.total_items):
             state = state.update(stack)
+            node = node - 1
+            state = state.update(node)
         
             
         self.assertTrue(state.finished_dropoff())

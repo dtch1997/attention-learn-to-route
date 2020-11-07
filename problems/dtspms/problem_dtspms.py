@@ -19,10 +19,11 @@ class DTSPMS(object):
     @staticmethod
     def get_costs(dataset, pi):
         """
-        This function 
+        Get the cost associated with a particular solution 
         
         :param dataset:     A DTSPMS instance
-        :param pi:          torch.Tensor (B, N, 1) (I think?)
+        :param pi:          torch.Tensor (B, sequence_len)
+                            A valid solution. No error checking is done!
         """
     
         loc = torch.cat([
@@ -35,9 +36,11 @@ class DTSPMS(object):
         total_items = dataset['pickup_loc'].size(1)
         
         # Filter out the stack actions
+        batch_size = pi.size(0)
+        # The policy includes travel to stack nodes, but we want only the item nodes
         pi = pi[pi < 2 * total_items + 2]
+        pi = pi.view(batch_size,-1)
         index = pi[..., None].expand(*pi.size(), loc.size(-1))
-        print(index.shape)
         d = loc.gather(1, index)
         return (
             (d[:, 1:] - d[:, :-1]).norm(p=2, dim=2).sum(1)

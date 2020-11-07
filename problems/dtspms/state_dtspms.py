@@ -33,7 +33,7 @@ class StateDTSPMS(NamedTuple):
     lengths: torch.Tensor 
     cur_coord: torch.Tensor
     stack: Stack                    # Keeps track of items on the stack
-    
+    next_item_to_unload: torch.Tensor   # The next item to unload, if applicable
     
     # Global variables; these are shared across all batch elements
     i: torch.Tensor                 # Keeps track of step
@@ -124,7 +124,8 @@ class StateDTSPMS(NamedTuple):
             pickup = True,  
             transit = False,
             dropoff = False,
-            next_action_is_stack = False    # On the first action, we need to select a node to move to. 
+            next_action_is_stack = False,    # On the first action, we need to select a node to move to. 
+            next_item_to_unload = torch.zeros((batch_size, 1), dtype=torch.int64, device = loc.device)
         )
         
     def get_final_cost(self):
@@ -161,7 +162,7 @@ class StateDTSPMS(NamedTuple):
             if state.next_action_is_stack: 
                 # pickup phase, stack action
                 stack_idx = action - (2 * state.total_items + 2)
-                # shape (B, 1) -> (B, 1, 1)
+                # shape (B,) -> (B, 1, 1)
                 stack_idx = stack_idx[:,None,None]
                 
                 item = state.get_current_node()
@@ -203,16 +204,24 @@ class StateDTSPMS(NamedTuple):
                 
         elif state.dropoff:
             # dropoff phase.
-            # Combine both stack action and node action in a single input
-            # Technicall, should move before unloading but it doesn't matter
-            # in our implementation
             
-            assert (state.next_action_is_stack) 
-            stack_idx = action - (2 * state.total_items + 2)
-            stack_idx = stack_idx[:,None,None]
-            state, item = StateDTSPMS._unload(state, stack_idx)
-            new_node = item[:,0,0,0]
-            state = StateDTSPMS._move(state, new_node)
+            if state.next_action_is_stack:
+                # Select a stack to unload
+                stack_idx = action - (2 * state.total_items + 2)
+                stack_idx = stack_idx[:,None,None]
+                state, item = StateDTSPMS._unload(state, stack_idx)
+                state = StateDTSPMS._set_next_action(state, stack = False)
+                state = StateDTSPMS._set_next_item(state, item)
+                
+            else:
+                # Unload previously selected stack
+                next_item = state.next_item_to_unload              
+                dest_node = next_item[:,0,0,0] + state.total_items + 1
+                new_node = action
+                assert (new_node == dest_node).all(), f"{new_node}, {dest_node}"
+                state = StateDTSPMS._move(state, new_node)
+                state = StateDTSPMS._set_next_action(state, stack = True)
+                state = StateDTSPMS._set_next_item(state, torch.zeros_like(next_item) -1)
         
             if state.finished_dropoff():
                 # After completing deliveries, we must take a single node action
@@ -252,11 +261,13 @@ class StateDTSPMS(NamedTuple):
             # Add one dimension since we write a single value
             visited_ = visited_.scatter(-1, new_node[:, :, None], 1)
         else:
-            visited_ = mask_long_scatter(visited_, new_node)        
+            visited_ = mask_long_scatter(visited_, new_node)  
+            
         return state._replace(
             prev_a = new_node,
             cur_coord = cur_coord, 
-            lengths = lengths
+            lengths = lengths,
+            visited_ = visited_
         )
 
     @staticmethod
@@ -279,6 +290,12 @@ class StateDTSPMS(NamedTuple):
     def _set_next_action(state, stack: bool):
         return state._replace(
             next_action_is_stack = stack
+        )
+    
+    @staticmethod
+    def _set_next_item(state, item):
+        return state._replace(
+            next_item_to_unload = item    
         )
     
     @staticmethod
@@ -312,7 +329,8 @@ class StateDTSPMS(NamedTuple):
             and (self.get_current_node() >= self.total_items + 1).all()
     
     def finished_dropoff(self):
-        return self.num_dropped_off.item() >= self.total_items
+        return self.num_dropped_off.item() >= self.total_items \
+            and (self.next_item_to_unload < 0).all()
 
     def all_finished(self):
         return self.finished_pickup() and self.finished_dropoff() \
@@ -346,7 +364,12 @@ class StateDTSPMS(NamedTuple):
                 # We need to move to the pickup depot
                 mask = pickup_depot_mask
         elif self.dropoff:
-            assert False, "Node mask is not required during pickup and transit phases"
+            next_item = self.next_item_to_unload[:,:,0,0]
+            # assert (next_item > 0).all()
+            new_node = next_item + self.total_items + 1
+            mask = torch.ones_like(self.visited)
+            mask.scatter_(-1, new_node[:,:,None], 0)
+            
         else:
             mask = delivery_depot_mask
             
