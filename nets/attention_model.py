@@ -96,10 +96,10 @@ class AttentionModel(nn.Module):
             # DTSPMS
             # We focus on the case with 2 stacks
             # and at most 20 items
-            
-            step_context_dim = 3 * embedding_dim # both stack contents, previous node
+            item_embed_dim = 32
+            step_context_dim = 2 * item_embed_dim + embedding_dim 
             # - previous node
-            # - stack contents
+            # - both stack contents
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
             self.init_embed_pickup = nn.Linear(2, embedding_dim)
             self.init_embed_dropoff = nn.Linear(2, embedding_dim)
@@ -109,7 +109,15 @@ class AttentionModel(nn.Module):
             self.stack_node_embed = nn.Embedding(2, embedding_dim)
             # Embed an item
             # Need 20 + 1 embeddings; empty = 0 is also embedded
-            self.item_embed = nn.Embedding(21, embedding_dim)
+            self.item_embed = nn.Embedding(21, item_embed_dim)
+            # A relatively simple transformer to embed the stack
+            from nets.transformer import TransformerModel
+            self.stack_content_embed = TransformerModel(
+                ninp = item_embed_dim,
+                nhead = 4,
+                nhid = item_embed_dim,
+                nlayers = 1
+            )
 
         else:  # TSP
             assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
@@ -473,13 +481,29 @@ class AttentionModel(nn.Module):
                     .expand(batch_size, num_steps, embeddings.size(-1))
             ).view(batch_size, num_steps, embeddings.size(-1))
             
-            # Sum along the stack_size dimension
-            # Take max along the num_stack dimension
+
+
             stack_emb = self.item_embed(state.stack.contents)
+            # shape (B, step, num_stacks, stack_size, item_embed_dim)
+            batch_size, num_steps, num_stacks, stack_size, emb_dim = stack_emb.size()
+            
+            stack_emb = stack_emb.view(-1, stack_size, emb_dim)
+            stack_emb = self.stack_content_emb(stack_emb)
+            # Reset to original shape
+            stack_emb = stack_emb.view(batch_size, num_steps, num_stacks, stack_size, emb_dim)
+
+            # Aggregate across stack_size dimension            
             stack_emb = stack_emb.sum(dim = -2)
-            batch_size, num_steps, num_stacks, emb_dim = stack_emb.size()
+            # shape (B, step, num_stacks, item_embed_dim)
+            
+            stack_emb = stack_emb.view(-1,emb_dim)
+            stack_emb = self.stack_content_embed(stack_emb)
+            # shape (B * step * num_stacks, item_embed_dim)
+            
+            # reshape so that we concatenate both stack contents along last dimension
             stack_emb = stack_emb.view(batch_size, num_steps, -1)
-                            
+            # shappe (B, step, num_stacks * item_embed_dim)            
+               
             return torch.cat(
                 (current_node_emb, stack_emb), 2 
             )
