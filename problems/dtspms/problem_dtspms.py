@@ -36,8 +36,7 @@ class DTSPMS(object):
         
         # Filter out the stack actions
         pi = pi[pi < 2 * total_items + 2]
-    
-        d = loc.gather(1, pi.unsqueeze(-1).expand_as(dataset))
+        d = loc.gather(1, pi[..., None].expand(*pi.size(), loc.size(-1)))
         return (
             (d[:, 1:] - d[:, :-1]).norm(p=2, dim=2).sum(1)
             # In the transit phase, we move from the pickup to dropoff depot
