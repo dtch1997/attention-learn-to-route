@@ -16,9 +16,16 @@ from nets.attention_model import AttentionModel
 from nets.pointer_network import PointerNetwork, CriticNetworkLSTM
 from utils import torch_load_cpu, load_problem
 
+import traceback
 import warnings
-warnings.filterwarnings('ignore', message='indexing with dtype torch.uint8 is now deprecated')
+import sys
 
+def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+    log = file if hasattr(file,'write') else sys.stderr
+    traceback.print_stack(file=log)
+    log.write(warnings.formatwarning(message, category, filename, lineno, line))
+    
+warnings.showwarning = warn_with_traceback
 
 def run(opts):
 
