@@ -43,7 +43,6 @@ class TestAttentionModel(unittest.TestCase):
 
         for batch in training_dataloader:
             cost, ll = model(batch)
-            print(cost, ll)
             break
     
     def test_partial_forward_pass(self):
@@ -78,11 +77,10 @@ class TestAttentionModel(unittest.TestCase):
             self.assertTrue(init_embed.size() == (2,14,8))
             final_embed, _ = model.embedder(init_embed)
             self.assertTrue(final_embed.size() == (2,14, 8))
-            _log_p, pi = model._inner(batch, final_embed)
-            cost, mask = model.problem.get_costs(batch, pi)
-            
             context = model._get_parallel_step_context(final_embed, state)
             self.assertTrue(context.size() == (2,1,24))
+            _log_p, pi = model._inner(batch, final_embed)
+            cost, mask = model.problem.get_costs(batch, pi)
             break
         
 

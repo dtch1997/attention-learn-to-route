@@ -96,8 +96,7 @@ class AttentionModel(nn.Module):
             # DTSPMS
             # We focus on the case with 2 stacks
             # and at most 20 items
-            item_embed_dim = 32
-            step_context_dim = 2 * item_embed_dim + embedding_dim 
+            step_context_dim = 3 * embedding_dim 
             # - previous node
             # - both stack contents
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
@@ -109,13 +108,13 @@ class AttentionModel(nn.Module):
             self.stack_node_embed = nn.Embedding(2, embedding_dim)
             # Embed an item
             # Need 20 + 1 embeddings; empty = 0 is also embedded
-            self.item_embed = nn.Embedding(21, item_embed_dim)
+            self.item_embed = nn.Embedding(21, embedding_dim)
             # A relatively simple transformer to embed the stack
             from nets.transformer import TransformerModel
             self.stack_content_embed = TransformerModel(
-                ninp = item_embed_dim,
+                ninp = embedding_dim,
                 nhead = 4,
-                nhid = item_embed_dim,
+                nhid = embedding_dim,
                 nlayers = 1
             )
 
@@ -488,7 +487,7 @@ class AttentionModel(nn.Module):
             batch_size, num_steps, num_stacks, stack_size, emb_dim = stack_emb.size()
             
             stack_emb = stack_emb.view(-1, stack_size, emb_dim)
-            stack_emb = self.stack_content_emb(stack_emb)
+            stack_emb = self.stack_content_embed(stack_emb)
             # Reset to original shape
             stack_emb = stack_emb.view(batch_size, num_steps, num_stacks, stack_size, emb_dim)
 
@@ -496,9 +495,6 @@ class AttentionModel(nn.Module):
             stack_emb = stack_emb.sum(dim = -2)
             # shape (B, step, num_stacks, item_embed_dim)
             
-            stack_emb = stack_emb.view(-1,emb_dim)
-            stack_emb = self.stack_content_embed(stack_emb)
-            # shape (B * step * num_stacks, item_embed_dim)
             
             # reshape so that we concatenate both stack contents along last dimension
             stack_emb = stack_emb.view(batch_size, num_steps, -1)
