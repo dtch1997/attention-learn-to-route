@@ -81,8 +81,8 @@ class StateDTSPMS(NamedTuple):
     def initialize(input, visited_dtype=torch.uint8):
         pickup_depot = input['pickup_depot']        # Shape (B, 2)
         dropoff_depot = input['dropoff_depot']      # Shape (B, 2)
-        pickup_loc = input['pickup_loc'][:,:,:2]    # Shape (B, N, 2)
-        dropoff_loc = input['dropoff_loc'][:,:,:2]  # Shape (B, N, 2)
+        pickup_loc = input['pickup_loc']            # Shape (B, N, 2)
+        dropoff_loc = input['dropoff_loc']          # Shape (B, N, 2)
         stack_size = input['stack_size']
         num_stacks = input['num_stacks']
         

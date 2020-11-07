@@ -9,6 +9,7 @@ import os
 import torch
 import pickle
 from torch.utils.data import Dataset
+from utils.beam_search import beam_search
 from problems.dtspms.state_dtspms import StateDTSPMS
 
 class DTSPMS(object):
@@ -23,8 +24,6 @@ class DTSPMS(object):
         :param dataset:     A DTSPMS instance
         :param pi:          torch.Tensor (B, N, 1) (I think?)
         """
-        print(f"Pi shape: {pi.shape}")
-        assert DTSPMS._is_valid(pi), "Invalid solution"
     
         loc = torch.cat([
             dataset['pickup_depot'][:,None,:],
@@ -57,14 +56,20 @@ class DTSPMS(object):
     @staticmethod
     def beam_search(input, beam_size, expand_size=None,
                     compress_mask=False, model=None, max_calc_batch_size=4096):
-        raise NotImplementedError
-    
-    @staticmethod
-    def is_valid(pi):
-        # Each sequence should be a permutation of (0, 1, ..., 2N+1)
-        return (torch.arange(pi.size(1), out=pi.data.new()) \
-                     .view(1, -1).expand_as(pi) \
-            == pi.data.sort(1)[0]).all()
+        assert model is not None, "Provide model"
+
+        fixed = model.precompute_fixed(input)
+
+        def propose_expansions(beam):
+            return model.propose_expansions(
+                beam, fixed, expand_size, normalize=True, max_calc_batch_size=max_calc_batch_size
+            )
+
+        state = DTSPMS.make_state(
+            input, visited_dtype=torch.int64 if compress_mask else torch.uint8
+        )
+
+        return beam_search(state, beam_size, propose_expansions)
     
 class DTSPMSDataset(Dataset):
     
@@ -83,7 +88,6 @@ class DTSPMSDataset(Dataset):
                 data = pickle.load(f)
                 self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
         else:
-            indices = torch.arange(1, size+1).to(torch.float32).view(-1,1)
             
             self.data = [
                 {
@@ -93,16 +97,8 @@ class DTSPMSDataset(Dataset):
                     
                     # This is necessary because the same embedder
                     # is used for all such nodes
-                    'pickup_loc': torch.cat((
-                        torch.FloatTensor(size, 2).uniform_(0, 1),
-                        indices,
-                        torch.zeros((size, 0))
-                    ), 1),
-                    'dropoff_loc': torch.cat((
-                        torch.FloatTensor(size, 2).uniform_(0,1),
-                        indices, 
-                        torch.zeros((size, 1))
-                    ), 1),
+                    'pickup_loc': torch.FloatTensor(size, 2).uniform_(0, 1),
+                    'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,1),
                     'pickup_depot': torch.FloatTensor(2).uniform_(0, 1),
                     'dropoff_depot': torch.FloatTensor(2).uniform_(0, 1),
                     'stack_size': stack_size, 

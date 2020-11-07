@@ -6,89 +6,92 @@ Created on Thu Nov  5 00:38:48 2020
 """
 
 import torch
-import pdb
+import unittest
 from problems.dtspms.state_dtspms import StateDTSPMS
-from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset
+from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset   
 
-from problems.tsp.problem_tsp import TSP, TSPDataset
-from problems.tsp.state_tsp import StateTSP
 
-from problems.dtspss.problem_dtspss import DTSPSS, DTSPSSDataset
-from problems.dtspss.problem_dtspss import StateDTSPSS
+class TestAttentionModel(unittest.TestCase):
+    """Test using the AttentionModel problem"""    
+    def test_dtspms(self):
+        from nets.attention_model import AttentionModel
+        from reinforce_baselines import NoBaseline
+        from torch.utils.data import DataLoader
+        
+        model = AttentionModel(
+            embedding_dim = 8,
+            hidden_dim = 8,
+            problem = DTSPMS,
+            n_encode_layers=3,
+            mask_inner=True,
+            mask_logits=True,
+            normalization='batch',
+            tanh_clipping=10,
+            checkpoint_encoder=True,
+            shrink_size=16
+        ).to(torch.device('cpu'))
+        
+        baseline = NoBaseline()
+        training_dataset = baseline.wrap_dataset(model.problem.make_dataset(
+            size=5, num_samples=10, distribution=None))
+        training_dataloader = DataLoader(training_dataset, batch_size=1, num_workers=0)
 
-def test_dtspss():
-    input = {
-        'pickup_depot': torch.FloatTensor([0, 0]).view(1,2),
-        'pickup_loc': torch.FloatTensor([(i,j) for i in range(3) for j in range(3)]).view(1,-1,2),
-        'dropoff_depot': torch.FloatTensor([4,4]).view(1,2),
-        'dropoff_loc': torch.FloatTensor([(i,j) for i in range(4, 7) for j in range(4, 7)]).view(1,-1,2),
-    }
-    
-    state = StateDTSPSS.initialize(input)
-    selected = torch.LongTensor([1]).view(1,)
-    for iteration in range(9):
-        print(state.get_current_node(), state.lengths, state.get_mask())
-        state = state.update(selected)
-        selected = selected + 1
-    print(state.get_current_node(), state.lengths, state.get_mask())
-    state = state.update(torch.LongTensor([0]).view(1,))
-    print(state.get_current_node(), state.lengths, state.get_mask())
-    state = state.update(torch.LongTensor([10]).view(1,))
-    print(state.get_current_node(), state.lengths, state.get_mask())
+        for batch in training_dataloader:
+            init_embed = model._init_embed(batch)
+            state = model.problem.make_state(batch)
+            self.assertTrue(init_embed.size() == (1,14,8))
+            final_embed, _ = model.embedder(init_embed)
+            self.assertTrue(final_embed.size() == (1,14, 8))
+            context = model._get_parallel_step_context(final_embed, state)
+            self.assertTrue(context.size() == (1,1,24))
+            break
 
-    # Should be delivering items now
-    selected = selected + 10
-    for iteration in range(9):
-        selected = selected - 1
-        state = state.update(selected)
-        print(state.get_current_node(), state.lengths, state.get_mask())
-    print(state.finished_pickup(), state.finished_dropoff(), state.all_finished())
-    
-    print(state.get_mask().shape)
 
-def test_tsp():
-    input = torch.FloatTensor([(i,j) for i in range(3) for j in range(3)]).view(1,-1,2)
-    state = StateTSP.initialize(input)
-    selected = torch.LongTensor([1]).view(1,)
-    for iteration in range(8):
-        print(state.get_current_node(), state.lengths, state.get_mask())
-        state = state.update(selected)
-        selected = selected + 1
+class TestDTSPMS(unittest.TestCase):
+    """Unit test for the DTSPMS problem"""
+    pass
+
+class TestDTSPMSDataset(unittest.TestCase):
+    def test_initialize(self):
+        """Test initializing the dataset"""
+        dataset = DTSPMSDataset(size = 5, num_samples = 32, num_stacks=2, stack_size=5)    
     
+class TestStateDTSPMS(unittest.TestCase):
+    def test_dry_run(self):
+        """Dry run a valid solution. Test passes as long as the solution is valid"""
+        input = {
+            'pickup_depot': torch.FloatTensor([0, 0]).view(1,2),
+            'pickup_loc': torch.FloatTensor([(i,j) for i in range(2) for j in range(2)]).view(1,-1,2),
+            'dropoff_depot': torch.FloatTensor([3,3]).view(1,2),
+            'dropoff_loc': torch.FloatTensor([(i,j) for i in range(3, 5) for j in range(3, 5)]).view(1,-1,2),
+            'stack_size': 10,
+            'num_stacks': 2
+        }
+        
+        state = StateDTSPMS.initialize(input)
+        # print(state)
+        
+        # Simulate visiting (1,..,N, 0)
+        iteration = 0
+        node = torch.LongTensor([1])    
+        stack = torch.LongTensor([0]) + 2 * state.total_items + 2
     
-def test_dtspms():
-    input = {
-        'pickup_depot': torch.FloatTensor([0, 0]).view(1,2),
-        'pickup_loc': torch.FloatTensor([(i,j) for i in range(3) for j in range(3)]).view(1,-1,2),
-        'dropoff_depot': torch.FloatTensor([4,4]).view(1,2),
-        'dropoff_loc': torch.FloatTensor([(i,j) for i in range(4, 7) for j in range(4, 7)]).view(1,-1,2),
-        'stack_size': 10,
-        'num_stacks': 2
-    }
-    
-    state = StateDTSPMS.initialize(input)
-    
-    # Simulate visiting (1,..,N, 0)
-    iteration = 0
-    selected = torch.LongTensor([1]).view(1,)
-    stack = torch.LongTensor([0]).view(1,)
-    
-    #print(state.get_current_node())
-    #state = state.update(selected, stack)
-    #print(state.get_current_node())
-    
-    for iteration in range(state.total_items):
-        print(state.get_current_node(), state.lengths, state.get_mask())
-        state = state.update(selected, stack)
-        selected = selected + 1
-    print(state.get_current_node(), state.lengths, state.get_mask())
-    state = state.update(torch.LongTensor([0]).view(1,), stack)
-    print(state.get_current_node(), state.lengths, state.get_mask())
-    state = state.update(torch.LongTensor([state.total_items+1]).view(1,), stack)
-    print(state.get_current_node(), state.lengths, state.get_mask())
-    
-    state = state.update(None, stack)
-    print(state.get_current_node(), state.lengths, state.get_mask())
+        for iteration in range(state.total_items):
+            state = state.update(node)
+            node = node + 1
+
+            state = state.update(stack)
+        self.assertTrue(state.finished_pickup())
+            
+        state = state.update(torch.LongTensor([0]))
+        state = state.update(torch.LongTensor([5]))
+        self.assertTrue(state.finished_transit())
+        
+        for iteration in range(state.total_items):
+            state = state.update(stack)
+        
+            
+        self.assertTrue(state.finished_dropoff())
     
 if __name__ == "__main__":
-    test_dtspss()
+    unittest.main()

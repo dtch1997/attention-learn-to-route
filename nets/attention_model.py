@@ -100,14 +100,15 @@ class AttentionModel(nn.Module):
             step_context_dim = 2 * embedding_dim 
             # - previous node
             # - stack contents
-            node_dim = 4        # x, y, pickup/dropoff, item index
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)
+            self.init_embed_pickup = nn.Linear(2, embedding_dim)
+            self.init_embed_dropoff = nn.Linear(2, embedding_dim)
             self.init_embed_dropoff_depot = nn.Linear(2, embedding_dim)
             # Stack actions are represented as nodes in the graph, we need
             # an embedder for that as well
             self.stack_node_embed = nn.Embedding(2, embedding_dim)
-            # Stack contents are embedded as the sum of embeddings of their items
-            self.stack_embed = nn.Embedding(20, embedding_dim)
+            # Embed an item
+            self.item_embed = nn.Embedding(20, embedding_dim)
 
         else:  # TSP
             assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
@@ -118,7 +119,8 @@ class AttentionModel(nn.Module):
             self.W_placeholder = nn.Parameter(torch.Tensor(2 * embedding_dim))
             self.W_placeholder.data.uniform_(-1, 1)  # Placeholder should be in range of activations
 
-        self.init_embed = nn.Linear(node_dim, embedding_dim)
+        if not self.is_dtspms:
+            self.init_embed = nn.Linear(node_dim, embedding_dim)
 
         self.embedder = GraphAttentionEncoder(
             n_heads=n_heads,
@@ -238,18 +240,22 @@ class AttentionModel(nn.Module):
                 1
             )
         elif self.is_dtspms:
-            device = input['pickup_loc'].device()
-            batch_size = input['pickup_loc'].size(0)
+            device = input['pickup_loc'].device
+            batch_size, total_items, _ = input['pickup_loc'].size()
+            item_indices = torch.arange(1, total_items + 1).view(1,-1) \
+                        .repeat((batch_size, 1)) \
+                        .to(torch.int64).to(device) 
             stack_zero = torch.zeros((batch_size, 1), dtype=torch.int64).to(device)
             stack_one = torch.ones((batch_size, 1), dtype=torch.int64).to(device)
+            
             return torch.cat(
                 (
                     self.init_embed_pickup_depot(input['pickup_depot'])[:, None, :],
-                    self.init_embed(input['pickup_loc']),
+                    self.init_embed_pickup(input['pickup_loc']) + self.item_embed(item_indices),
                     self.init_embed_dropoff_depot(input['dropoff_depot'])[:, None, :],
-                    self.init_embed(input['dropoff_loc']),
-                    self.stack_node_embed(stack_zero)[:, None, :],
-                    self.stack_node_embed(stack_one)[:, None, :]
+                    self.init_embed_dropoff(input['dropoff_loc']) + self.item_embed(item_indices),
+                    self.stack_node_embed(stack_zero),
+                    self.stack_node_embed(stack_one)
                 ),
                 1
             )
@@ -468,9 +474,10 @@ class AttentionModel(nn.Module):
             
             # Sum along the stack_size dimension
             # Take max along the num_stack dimension
-            stack_emb = self.stack_embed(state.stack.contents) \
-                            .sum(dim = -2) \
-                            .max(dim = -2)   
+            stack_emb = self.item_embed(state.stack.contents)
+            stack_emb = stack_emb.sum(dim = -2)
+            batch_size, num_steps, num_stacks, emb_dim = stack_emb.size()
+            stack_emb = stack_emb.view(batch_size, num_steps, -1)
                             
             return torch.cat(
                 (current_node_emb, stack_emb), 2 
