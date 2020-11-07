@@ -95,16 +95,10 @@ class DTSPMSDataset(Dataset):
             
             self.data = [
                 {
-                    # Non-depot nodes are augmented with :
-                    # - index of the item they contain
-                    # - whether they are pickup or dropoff
-                    
-                    # This is necessary because the same embedder
-                    # is used for all such nodes
-                    'pickup_loc': torch.FloatTensor(size, 2).uniform_(0, 1),
-                    'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,1),
-                    'pickup_depot': torch.FloatTensor(2).uniform_(0, 1),
-                    'dropoff_depot': torch.FloatTensor(2).uniform_(0, 1),
+                    'pickup_loc': torch.FloatTensor(size, 2).uniform_(0, 100),
+                    'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,100),
+                    'pickup_depot': torch.Tensor([50.0, 50.0]).to(torch.float32),
+                    'dropoff_depot': torch.Tensor([50.0, 50.0]).to(torch.float32),
                     'stack_size': stack_size, 
                     'num_stacks': num_stacks,
                 }
