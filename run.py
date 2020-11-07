@@ -17,7 +17,7 @@ from nets.pointer_network import PointerNetwork, CriticNetworkLSTM
 from utils import torch_load_cpu, load_problem
 
 import warnings
-warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', message='indexing with dtype torch.uint8 is now deprecated')
 
 
 def run(opts):
