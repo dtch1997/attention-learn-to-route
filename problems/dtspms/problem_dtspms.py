@@ -104,7 +104,7 @@ class DTSPMSDataset(Dataset):
                         torch.zeros((size, 1))
                     ), 1),
                     'pickup_depot': torch.FloatTensor(2).uniform_(0, 1),
-                    'dropoff_depot': torch.FloatTensor(2).uniform(0, 1),
+                    'dropoff_depot': torch.FloatTensor(2).uniform_(0, 1),
                     'stack_size': stack_size, 
                     'num_stacks': num_stacks,
                 }
