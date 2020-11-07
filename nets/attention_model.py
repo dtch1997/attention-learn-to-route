@@ -97,7 +97,7 @@ class AttentionModel(nn.Module):
             # We focus on the case with 2 stacks
             # and at most 20 items
             
-            step_context_dim = 2 * embedding_dim 
+            step_context_dim = 3 * embedding_dim # both stack contents, previous node
             # - previous node
             # - stack contents
             self.init_embed_pickup_depot = nn.Linear(2, embedding_dim)

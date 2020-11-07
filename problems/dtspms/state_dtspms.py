@@ -78,19 +78,16 @@ class StateDTSPMS(NamedTuple):
         return super(StateDTSPMS, self).__getitem__(key)
     
     @staticmethod
-    def initialize(input, visited_dtype=torch.uint8):
+    def initialize(input, visited_dtype=torch.uint8, stack_size=20, num_stacks=2):
         pickup_depot = input['pickup_depot']        # Shape (B, 2)
         dropoff_depot = input['dropoff_depot']      # Shape (B, 2)
         pickup_loc = input['pickup_loc']            # Shape (B, N, 2)
         dropoff_loc = input['dropoff_loc']          # Shape (B, N, 2)
-        stack_size = input['stack_size']
-        num_stacks = input['num_stacks']
         
         # Number of pickup and dropoff locations must be the same
         assert pickup_loc.size(1) == dropoff_loc.size(1), "Unequal number of pickup and dropoff locations"
         batch_size, n_loc, _ = pickup_loc.size()
         # Check that we have enough space in the stacks to pick up all items
-        assert num_stacks * stack_size >= n_loc, "Total item capacity is insufficient to pick up all items"
         
         # Store depot location as index 0
         loc_pickup=torch.cat((pickup_depot[:, None, :], pickup_loc), -2)
@@ -366,7 +363,7 @@ class StateDTSPMS(NamedTuple):
         else:
             # Mask should be 0 for any stack with remaining items
             mask = self.stack.empty()
-        mask = mask[:,:,:,0]
+        mask = mask[:,:,:,0].to(torch.uint8)
         return torch.cat(
             (torch.ones_like(self.visited), mask),
             dim = -1
