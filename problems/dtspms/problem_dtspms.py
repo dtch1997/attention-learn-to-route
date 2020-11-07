@@ -95,6 +95,8 @@ class DTSPMSDataset(Dataset):
             
             self.data = [
                 {
+                    # Convention in the literature is pickup / delivery depot at (50,50)
+                    # all locations sampled uniformly in (0, 100)
                     'pickup_loc': torch.FloatTensor(size, 2).uniform_(0, 100),
                     'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,100),
                     'pickup_depot': torch.Tensor([50.0, 50.0]).to(torch.float32),
