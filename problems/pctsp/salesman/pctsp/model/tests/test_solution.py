@@ -1,8 +1,8 @@
 # python -m pctsp.model.tests.test_solution
 import unittest
 
-from pctsp.model import solution
-from pctsp.model import pctsp
+from problems.pctsp.salesman.pctsp.model import solution
+from problems.pctsp.salesman.pctsp.model import pctsp
 import numpy as np
 
 class TestTrain(unittest.TestCase):
