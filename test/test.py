@@ -92,9 +92,12 @@ class TestDTSPMS(unittest.TestCase):
         pass
 
 class TestDTSPMSDataset(unittest.TestCase):
-    def test_initialize(self):
+    def test_initialize_new(self):
         """Test initializing the dataset"""
         dataset = DTSPMSDataset(size = 5, num_samples = 32, num_stacks=2, stack_size=5)    
+    
+    def test_load_generated(self):
+        dataset = DTSPMSDataset(filename = 'data/dtspms/dtspms20_validation_seed4321.pkl')        
     
 class TestStateDTSPMS(unittest.TestCase):
     def test_dry_run(self):

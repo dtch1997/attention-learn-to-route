@@ -52,6 +52,21 @@ def generate_op_data(dataset_size, op_size, prize_type='const'):
         np.full(dataset_size, MAX_LENGTHS[op_size]).tolist()  # Capacity, same for whole dataset
     ))
 
+def generate_dtspms_data(dataset_size, dtspms_size, num_stacks, stack_size):
+    pickup_depot = np.zeros((dataset_size, 2)) + 50
+    dropoff_depot = np.zeros((dataset_size, 2)) + 50
+    pickup_loc = np.random.uniform(low=0.0, high = 100.0, size=(dataset_size, dtspms_size, 2))
+    dropoff_loc = np.random.uniform(low=0.0, high = 100.0, size=(dataset_size, dtspms_size, 2))
+    num_stacks = [num_stacks] * dataset_size
+    stack_size = [stack_size] * dataset_size
+    return list(zip(
+        pickup_depot.tolist(),
+        dropoff_depot.tolist(),
+        pickup_loc.tolist(),
+        dropoff_loc.tolist(),
+        num_stacks,
+        stack_size
+    ))
 
 def generate_pctsp_data(dataset_size, pctsp_size, penalty_factor=3):
     depot = np.random.uniform(size=(dataset_size, 2))
@@ -109,6 +124,10 @@ if __name__ == "__main__":
                         help="Sizes of problem instances (default 20, 50, 100)")
     parser.add_argument("-f", action='store_true', help="Set true to overwrite")
     parser.add_argument('--seed', type=int, default=1234, help="Random seed")
+    # DTSPMS-specific parameters
+    parser.add_argument('--num_stacks', type=int, default = 2, help="Number of stacks for DTSPMS")
+    parser.add_argument('--stack_size', type=int, default = None, help="Stack size for DTSPMS")
+    
 
     opts = parser.parse_args()
 
@@ -119,7 +138,8 @@ if __name__ == "__main__":
         'tsp': [None],
         'vrp': [None],
         'pctsp': [None],
-        'op': ['const', 'unif', 'dist']
+        'op': ['const', 'unif', 'dist'],
+        'dtspms': [None]
     }
     if opts.problem == 'all':
         problems = distributions_per_problem
@@ -159,6 +179,13 @@ if __name__ == "__main__":
                     dataset = generate_pctsp_data(opts.dataset_size, graph_size)
                 elif problem == "op":
                     dataset = generate_op_data(opts.dataset_size, graph_size, prize_type=distribution)
+                elif problem == 'dtspms':
+                    if opts.stack_size is None:
+                        # Infinite capacity
+                        stack_size = graph_size
+                    else:
+                        stack_size = opts.stack_size
+                    dataset = generate_dtspms_data(opts.dataset_size, graph_size, opts.num_stacks, stack_size)
                 else:
                     assert False, "Unknown problem: {}".format(problem)
 

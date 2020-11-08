@@ -75,24 +75,38 @@ class DTSPMS(object):
 
         return beam_search(state, beam_size, propose_expansions)
     
+def make_instance(*args):
+    pickup_loc, dropoff_loc, pickup_depot, dropoff_depot, \
+        stack_size, num_stacks, *args = args
+    assert len(args) == 0
+    return {
+        'pickup_loc': torch.FloatTensor(pickup_loc),
+        'dropoff_loc': torch.FloatTensor(dropoff_loc),
+        'pickup_depot': torch.FloatTensor(pickup_depot),
+        'dropoff_depot': torch.FloatTensor(dropoff_depot),
+        'stack_size': stack_size,
+        'num_stacks': num_stacks
+    }
+    
 class DTSPMSDataset(Dataset):
     
     def __init__(self, filename=None, size=50, num_samples=1000000,
-                 offset=0, distribution=None, num_stacks = 2, stack_size = 16):
+                 offset=0, distribution=None, num_stacks = 2, stack_size = None):
         super(DTSPMSDataset, self).__init__()
 
         self.data_set = []
-        if filename is not None:
-            # Not yet sure how to load a dataset
-            raise NotImplementedError
-            
+        if filename is not None:            
             # Legacy code
             assert os.path.splitext(filename)[1] == '.pkl'
             with open(filename, 'rb') as f:
                 data = pickle.load(f)
-                self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
+            self.data = [make_instance(*args) for args in data[offset:offset+num_samples]]
+
         else:
-            
+            if stack_size is None:
+                # Infinite capcity
+                stack_size = size
+                
             self.data = [
                 {
                     # Convention in the literature is pickup / delivery depot at (50,50)
@@ -101,8 +115,9 @@ class DTSPMSDataset(Dataset):
                     'dropoff_loc': torch.FloatTensor(size, 2).uniform_(0,100),
                     'pickup_depot': torch.Tensor([50.0, 50.0]).to(torch.float32),
                     'dropoff_depot': torch.Tensor([50.0, 50.0]).to(torch.float32),
-                    'stack_size': stack_size, 
                     'num_stacks': num_stacks,
+                    'stack_size': stack_size, 
+
                 }
                 for i in range(num_samples)
             ]
