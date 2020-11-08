@@ -68,6 +68,37 @@ def generate_dtspms_data(dataset_size, dtspms_size, num_stacks, stack_size):
         stack_size
     ))
 
+def parse_dtspms_benchmark_data(dtspms_size, instance_id,
+                                num_stacks, stack_size):
+    pickup_path = f"problems/dtspms/benchmark_instances/{instance_id}p.tsp"
+    dropoff_path = f"problems/dtspms/benchmark_instances/{instance_id}d.tsp"
+    
+    def parse_file(path, size):
+        import csv
+        from io import StringIO
+        with open(path, 'r') as file:
+            data = file.read()
+        data = "\n".join(data.split("\n")[6:])
+        buffer = StringIO(data)
+        reader = csv.reader(buffer, delimiter = ' ')
+        
+        depot_loc = next(reader)
+        item_loc = list(reader)
+        item_loc = item_loc[:max(size, len(item_loc))]
+        return depot_loc, item_loc
+    
+    pickup_depot, pickup_loc = parse_file(pickup_path, dtspms_size)
+    dropoff_depot, dropoff_loc = parse_file(dropoff_path, dtspms_size)
+        
+    return [
+        pickup_loc,
+        dropoff_loc,
+        pickup_depot,
+        dropoff_depot,
+        num_stacks,
+        stack_size
+    ]
+
 def generate_pctsp_data(dataset_size, pctsp_size, penalty_factor=3):
     depot = np.random.uniform(size=(dataset_size, 2))
     loc = np.random.uniform(size=(dataset_size, pctsp_size, 2))
@@ -127,7 +158,8 @@ if __name__ == "__main__":
     # DTSPMS-specific parameters
     parser.add_argument('--num_stacks', type=int, default = 2, help="Number of stacks for DTSPMS")
     parser.add_argument('--stack_size', type=int, default = None, help="Stack size for DTSPMS")
-    
+    # For parsing DTSPMS benchmark instances
+    parser.add_argument('--from_benchmark', default=None, help="Instance ID of benchmark instance")    
 
     opts = parser.parse_args()
 
@@ -185,7 +217,16 @@ if __name__ == "__main__":
                         stack_size = graph_size
                     else:
                         stack_size = opts.stack_size
-                    dataset = generate_dtspms_data(opts.dataset_size, graph_size, opts.num_stacks, stack_size)
+                        
+                    if opts.from_benchmark is None:
+                        # Generate new data
+                        dataset = generate_dtspms_data(opts.dataset_size, graph_size, opts.num_stacks, stack_size)
+                    else:
+                        # Parse the benchmark instance
+                        instance_id = opts.from_benchmark
+                        dataset = parse_dtspms_benchmark_data(graph_size, instance_id, opts.num_stacks, stack_size)
+                        filename = f"{instance_id}_{graph_size}_{opts.num_stacks}_{stack_size}.pkl"
+                        filename = os.path.join(datadir, filename)
                 else:
                     assert False, "Unknown problem: {}".format(problem)
 
