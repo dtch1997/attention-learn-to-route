@@ -82,22 +82,25 @@ def parse_dtspms_benchmark_data(dtspms_size, instance_id,
         buffer = StringIO(data)
         reader = csv.reader(buffer, delimiter = ' ')
         
-        depot_loc = next(reader)
-        item_loc = list(reader)
+        depot_loc = next(reader)[1:]
+        depot_loc = list(map(float, depot_loc))
+        item_loc = list(map(lambda row: list(map(float, row)), reader))
+        
+        item_loc = [item[1:] for item in item_loc]
         item_loc = item_loc[:max(size, len(item_loc))]
         return depot_loc, item_loc
     
     pickup_depot, pickup_loc = parse_file(pickup_path, dtspms_size)
     dropoff_depot, dropoff_loc = parse_file(dropoff_path, dtspms_size)
         
-    return [
+    return [(
         pickup_loc,
         dropoff_loc,
         pickup_depot,
         dropoff_depot,
         num_stacks,
         stack_size
-    ]
+    )]
 
 def generate_pctsp_data(dataset_size, pctsp_size, penalty_factor=3):
     depot = np.random.uniform(size=(dataset_size, 2))

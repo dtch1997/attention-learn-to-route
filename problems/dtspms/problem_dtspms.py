@@ -101,7 +101,8 @@ class DTSPMSDataset(Dataset):
             with open(filename, 'rb') as f:
                 data = pickle.load(f)
             self.data = [make_instance(*args) for args in data[offset:offset+num_samples]]
-
+            num_samples = min(num_samples, len(self.data))
+            
         else:
             if stack_size is None:
                 # Infinite capcity
@@ -129,35 +130,4 @@ class DTSPMSDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx]
     
-def parse_benchmark_instance(size, instance_id = 'R00', 
-                             num_stacks = 2, stack_size = None):
-    pickup_path = f"benchmark_instances/{instance_id}p.tsp"
-    dropoff_path = f"benchmark_instances/{instance_id}d.tsp"
-    
-    def parse_file(path, size):
-        import csv
-        from io import StringIO
-        with open(path, 'r') as file:
-            data = file.read()
-        data = "\n".join(data.split("\n")[6:])
-        buffer = StringIO(data)
-        reader = csv.reader(buffer, delimiter = ' ')
-        
-        depot_loc = next(reader)
-        item_loc = list(reader)
-        item_loc = item_loc[:max(size, len(item_loc))]
-        return depot_loc, item_loc
-    
-    pickup_depot, pickup_loc = parse_file(pickup_path, size)
-    dropoff_depot, dropoff_loc = parse_file(dropoff_path, size)
-    if stack_size is None:
-        stack_size = size
-        
-    return [
-        pickup_loc,
-        dropoff_loc,
-        pickup_depot,
-        dropoff_depot,
-        num_stacks,
-        stack_size
-    ]
+

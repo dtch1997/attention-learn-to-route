@@ -128,6 +128,15 @@ class TestDTSPMSDataset(unittest.TestCase):
     
     def test_load_generated(self):
         dataset = DTSPMSDataset(filename = 'data/dtspms/dtspms20_validation_seed4321.pkl')
+        
+    def test_load_benchmark(self):
+        """
+        Test loading a benchmark instance 
+        
+        Data file is parsed with generate_data.py --from_benchmark
+        """
+        dataset = DTSPMSDataset(filename = 'data/dtspms/R00_20_2_20.pkl')
+        self.assertEqual(len(dataset), 1)
     
 class TestStateDTSPMS(unittest.TestCase):
     def test_dry_run(self):
