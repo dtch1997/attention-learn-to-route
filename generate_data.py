@@ -87,7 +87,7 @@ def parse_dtspms_benchmark_data(dtspms_size, instance_id,
         item_loc = list(map(lambda row: list(map(float, row)), reader))
         
         item_loc = [item[1:] for item in item_loc]
-        item_loc = item_loc[:max(size, len(item_loc))]
+        item_loc = item_loc[:min(dtspms_size, len(item_loc))]
         return depot_loc, item_loc
     
     pickup_depot, pickup_loc = parse_file(pickup_path, dtspms_size)
