@@ -83,6 +83,36 @@ class TestAttentionModel(unittest.TestCase):
             cost, mask = model.problem.get_costs(batch, pi)
             break
         
+    def test_eval(self):
+        from nets.attention_model import AttentionModel, set_decode_type
+        from reinforce_baselines import NoBaseline
+        from torch.utils.data import DataLoader
+        
+        model = AttentionModel(
+            embedding_dim = 8,
+            hidden_dim = 8,
+            problem = DTSPMS,
+            n_encode_layers=3,
+            mask_inner=True,
+            mask_logits=True,
+            normalization='batch',
+            tanh_clipping=10,
+            checkpoint_encoder=True,
+            shrink_size=None
+        ).to(torch.device('cpu'))
+        
+        model.eval()
+        set_decode_type(model, "greedy")
+        
+        baseline = NoBaseline()
+        training_dataset = baseline.wrap_dataset(model.problem.make_dataset(
+            size=5, num_samples=10, distribution=None))
+        training_dataloader = DataLoader(training_dataset, batch_size=2, num_workers=0)
+
+        for batch in training_dataloader:
+            cost, ll = model(batch)
+            break
+        
 
 
 class TestDTSPMS(unittest.TestCase):
@@ -97,7 +127,7 @@ class TestDTSPMSDataset(unittest.TestCase):
         dataset = DTSPMSDataset(size = 5, num_samples = 32, num_stacks=2, stack_size=5)    
     
     def test_load_generated(self):
-        dataset = DTSPMSDataset(filename = 'data/dtspms/dtspms20_validation_seed4321.pkl')        
+        dataset = DTSPMSDataset(filename = 'data/dtspms/dtspms20_validation_seed4321.pkl')
     
 class TestStateDTSPMS(unittest.TestCase):
     def test_dry_run(self):

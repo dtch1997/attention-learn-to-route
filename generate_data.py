@@ -60,10 +60,10 @@ def generate_dtspms_data(dataset_size, dtspms_size, num_stacks, stack_size):
     num_stacks = [num_stacks] * dataset_size
     stack_size = [stack_size] * dataset_size
     return list(zip(
-        pickup_depot.tolist(),
-        dropoff_depot.tolist(),
         pickup_loc.tolist(),
         dropoff_loc.tolist(),
+        pickup_depot.tolist(),
+        dropoff_depot.tolist(),
         num_stacks,
         stack_size
     ))
