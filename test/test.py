@@ -12,6 +12,23 @@ from problems.dtspms.problem_dtspms import DTSPMS, DTSPMSDataset
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
+class TestRandomModel(unittest.TestCase):
+    def test_forward_pass(self):
+        from nets.random_model import RandomModel, set_decode_type
+        from reinforce_baselines import NoBaseline
+        from torch.utils.data import DataLoader
+        
+        model = RandomModel(DTSPMS)
+        set_decode_type(model, "sampling")
+        baseline = NoBaseline()
+        training_dataset = baseline.wrap_dataset(model.problem.make_dataset(
+            size=5, num_samples=10, distribution=None))
+        training_dataloader = DataLoader(training_dataset, batch_size=2, num_workers=0)
+
+        for batch in training_dataloader:
+            cost, ll = model(batch)
+            break
+        
 
 class TestAttentionModel(unittest.TestCase):
     """Test the AttentionModel on the DTSPMS"""    

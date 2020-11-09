@@ -41,7 +41,14 @@ def get_best(sequences, cost, ids=None, batch_size=None):
 def eval_dataset_mp(args):
     (dataset_path, width, softmax_temp, opts, i, num_processes) = args
 
-    model, _ = load_model(opts.model)
+    # A hack; we will refactor this later. 
+    from nets.random_model import RandomModel
+    from problems.dtspms.problem_dtspms import DTSPMS 
+    if opts.model == 'random_dtspms':
+        model = RandomModel(problem = DTSPMS)
+    else:
+        model, _ = load_model(opts.model)
+
     val_size = opts.val_size // num_processes
     dataset = model.problem.make_dataset(filename=dataset_path, num_samples=val_size, offset=opts.offset + val_size * i)
     device = torch.device("cuda:{}".format(i))
@@ -51,7 +58,15 @@ def eval_dataset_mp(args):
 
 def eval_dataset(dataset_path, width, softmax_temp, opts):
     # Even with multiprocessing, we load the model here since it contains the name where to write results
-    model, _ = load_model(opts.model)
+
+    # A hack to load a random model for DTSPMS; we will refactor this later. 
+    from nets.random_model import RandomModel
+    from problems.dtspms.problem_dtspms import DTSPMS 
+    if opts.model == 'random_dtspms':
+        model = RandomModel(problem = DTSPMS)
+    else:
+        model, _ = load_model(opts.model)
+        
     use_cuda = torch.cuda.is_available() and not opts.no_cuda
     if opts.multiprocessing:
         assert use_cuda, "Can only do multiprocessing with cuda"

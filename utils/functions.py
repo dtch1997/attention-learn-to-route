@@ -77,7 +77,6 @@ def load_args(filename):
             args['data_distribution'] = dist[0]
     return args
 
-
 def load_model(path, epoch=None):
     from nets.attention_model import AttentionModel
     from nets.pointer_network import PointerNetwork

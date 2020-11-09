@@ -62,7 +62,7 @@ def run(opts):
     # Initialize model
     model_class = {
         'attention': AttentionModel,
-        'pointer': PointerNetwork
+        'pointer': PointerNetwork,
     }.get(opts.model, None)
     assert model_class is not None, "Unknown model: {}".format(model_class)
     model = model_class(
