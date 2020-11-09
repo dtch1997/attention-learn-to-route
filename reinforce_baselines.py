@@ -158,7 +158,11 @@ class RolloutBaseline(Baseline):
             if len(dataset) != self.opts.val_size:
                 print("Warning: not using saved baseline dataset since val_size does not match")
                 dataset = None
-            elif (dataset[0] if self.problem.NAME == 'tsp' else dataset[0]['loc']).size(0) != self.opts.graph_size:
+            elif (self.problem.NAME == 'dtspms' and dataset[0]['pickup_loc'].size(0) != self.opts.graph_size):
+                print("Warning: not using saved baseline dataset since graph_size does not match")
+                dataset =None
+            elif (self.problem.NAME != 'dtspms') and \
+                (dataset[0] if self.problem.NAME == 'tsp' else dataset[0]['loc']).size(0) != self.opts.graph_size:
                 print("Warning: not using saved baseline dataset since graph_size does not match")
                 dataset = None
 

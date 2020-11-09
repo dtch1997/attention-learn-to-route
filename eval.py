@@ -166,6 +166,8 @@ def _eval_dataset(model, dataset, width, softmax_temp, opts, device):
                 seq = np.trim_zeros(seq).tolist() + [0]  # Add depot
             elif model.problem.NAME in ("op", "pctsp"):
                 seq = np.trim_zeros(seq)  # We have the convention to exclude the depot
+            elif model.problem.NAME == "dtspms":
+                seq = seq.tolist()
             else:
                 assert False, "Unkown problem: {}".format(model.problem.NAME)
             # Note VRP only
