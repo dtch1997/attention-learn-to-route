@@ -226,10 +226,21 @@ if __name__ == "__main__":
                         dataset = generate_dtspms_data(opts.dataset_size, graph_size, opts.num_stacks, stack_size)
                     else:
                         # Parse the benchmark instance
-                        instance_id = opts.from_benchmark
-                        dataset = parse_dtspms_benchmark_data(graph_size, instance_id, opts.num_stacks, stack_size)
-                        filename = f"{instance_id}_{graph_size}_{opts.num_stacks}_{stack_size}.pkl"
-                        filename = os.path.join(datadir, filename)
+                        instance_ids = opts.from_benchmark
+                        if instance_ids == 'all':
+                            instance_ids = [f"R0{i}" for i in range(10)] + [f"R{i}" for i in range(10,20)]
+                        else:
+                            assert len(instance_ids) == 3 \
+                                and instance_ids[0] == 'R' \
+                                and 0 <= int(instance_ids)[1:] < 20
+                            instance_ids = [instance_ids]
+                            
+                        for instance_id in instance_ids:
+                            dataset = parse_dtspms_benchmark_data(graph_size, instance_id, opts.num_stacks, stack_size)
+                            filename = f"{instance_id}_{graph_size}_{opts.num_stacks}_{stack_size}.pkl"
+                            filename = os.path.join(datadir, filename)
+                            save_dataset(dataset, filename)
+
                 else:
                     assert False, "Unknown problem: {}".format(problem)
 
